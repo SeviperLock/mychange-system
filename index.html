@@ -76,24 +76,7 @@
       box-sizing: border-box;
       resize: vertical;
     }
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      margin-top: 16px;
-    }
-    th, td {
-      padding: 8px;
-      border: 1px solid #e0e0e0;
-      text-align: left;
-      font-size: 0.95em;
-    }
-    th {
-      background: #f0f7ff;
-    }
-    .done {
-      background: #d4f7d4;
-    }
-    .login-container {
+    .login-container, .register-container, .activation-container {
       max-width: 400px;
       margin: 60px auto;
       background: white;
@@ -101,7 +84,7 @@
       border-radius: 14px;
       box-shadow: 0 2px 8px rgba(0,0,0,0.10);
     }
-    .login-title { 
+    .form-title { 
       text-align: center; 
       margin-bottom: 24px; 
       font-size: 1.3em;
@@ -122,8 +105,30 @@
     .logout-btn:hover {
       background: #d32f2f;
     }
-    .checkbox-cell {
-      text-align: center;
+    .entry-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+    .entry-item {
+      background: #f0f7ff;
+      margin-bottom: 12px;
+      border-radius: 8px;
+      padding: 12px 16px;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.07);
+      transition: background 0.2s;
+    }
+    .entry-date {
+      font-weight: bold;
+      color: #86c5ff;
+    }
+    .entry-detail {
+      margin-top: 8px;
+      font-size: 0.98em;
+      color: #444;
+    }
+    .hidden {
+      display: none;
     }
   </style>
 </head>
@@ -137,16 +142,109 @@
     &copy; 2025 MyChange System. Designed for your growth journey.
   </div>
   <script>
-    // --- LocalStorage keys ---
-    const USER_KEY = "mychange_username";
-    const PASS_KEY = "mychange_password";
-    const RESPONSES_KEY = "mychange_daily_responses";
+    // ---- LocalStorage keys ----
+    const USERS_KEY = "mychange_users"; // stores user info
+    const ACTIVATED_USERS_KEY = "mychange_activated_users"; // stores activated usernames
 
-    // --- Login logic ---
+    // Helper to get users data
+    function getUsers() {
+      return JSON.parse(localStorage.getItem(USERS_KEY) || "{}");
+    }
+    function setUsers(users) {
+      localStorage.setItem(USERS_KEY, JSON.stringify(users));
+    }
+    function getActivatedUsers() {
+      return JSON.parse(localStorage.getItem(ACTIVATED_USERS_KEY) || "[]");
+    }
+    function setActivatedUsers(list) {
+      localStorage.setItem(ACTIVATED_USERS_KEY, JSON.stringify(list));
+    }
+
+    // ---- Session ----
+    let sessionUser = null; // { username, email }
+
+    // ---- App navigation ----
+    let currentTab = "calendar";
+
+    // ---- Registration ----
+    function renderRegister() {
+      document.getElementById('app').innerHTML = `
+        <div class="register-container">
+          <div class="form-title">Register for MyChange</div>
+          <form id="register-form">
+            <label>Email</label>
+            <input type="email" id="reg-email" required />
+            <label>Username</label>
+            <input type="text" id="reg-username" required />
+            <label>Password</label>
+            <input type="password" id="reg-password" required />
+            <button type="submit">Register</button>
+          </form>
+          <p style="text-align:center; font-size:0.96em; margin-top:8px;">
+            Already registered? <a href="#" id="goto-login">Login</a>
+          </p>
+        </div>
+      `;
+      document.getElementById("goto-login").onclick = function(e) {
+        e.preventDefault();
+        renderLogin();
+      };
+      document.getElementById('register-form').onsubmit = function(e) {
+        e.preventDefault();
+        const email = document.getElementById('reg-email').value.trim().toLowerCase();
+        const username = document.getElementById('reg-username').value.trim();
+        const password = document.getElementById('reg-password').value;
+        if (!email || !username || !password) return;
+        let users = getUsers();
+        if (users[username]) {
+          alert("Username already exists.");
+          return;
+        }
+        users[username] = { email, password, activated: false };
+        setUsers(users);
+        renderActivation(email, username);
+      };
+    }
+
+    // ---- Activation ----
+    function renderActivation(email, username) {
+      // "Simulated" activation link
+      document.getElementById('app').innerHTML = `
+        <div class="activation-container">
+          <div class="form-title">Activate Your Account</div>
+          <p>
+            We've sent an activation link to <strong>${email}</strong>.<br>
+            <em>(Simulation: Click the link below to activate!)</em>
+          </p>
+          <button id="activate-link">Activate Account</button>
+          <p style="text-align:center; font-size:0.96em; margin-top:8px;">
+            Already activated? <a href="#" id="goto-login">Login</a>
+          </p>
+        </div>
+      `;
+      document.getElementById("activate-link").onclick = function() {
+        let users = getUsers();
+        users[username].activated = true;
+        setUsers(users);
+        let activatedUsers = getActivatedUsers();
+        if (!activatedUsers.includes(username)) {
+          activatedUsers.push(username);
+          setActivatedUsers(activatedUsers);
+        }
+        alert("Account activated! You can now login.");
+        renderLogin();
+      };
+      document.getElementById("goto-login").onclick = function(e) {
+        e.preventDefault();
+        renderLogin();
+      };
+    }
+
+    // ---- Login ----
     function renderLogin() {
       document.getElementById('app').innerHTML = `
         <div class="login-container">
-          <div class="login-title">Login to MyChange</div>
+          <div class="form-title">Login to MyChange</div>
           <form id="login-form">
             <label>Username</label>
             <input type="text" id="login-username" required />
@@ -154,53 +252,71 @@
             <input type="password" id="login-password" required />
             <button type="submit">Login</button>
           </form>
-          <p style="text-align:center; font-size:0.96em; margin-top:8px;">First time? Enter any username and password to create your account.</p>
+          <p style="text-align:center; font-size:0.96em; margin-top:8px;">
+            New here? <a href="#" id="goto-register">Register</a>
+          </p>
         </div>
       `;
+      document.getElementById("goto-register").onclick = function(e) {
+        e.preventDefault();
+        renderRegister();
+      };
       document.getElementById('login-form').onsubmit = function(e) {
         e.preventDefault();
         const username = document.getElementById('login-username').value.trim();
         const password = document.getElementById('login-password').value;
-        if (!username || !password) return;
-        // If user not stored, create new
-        let storedUser = localStorage.getItem(USER_KEY);
-        let storedPass = localStorage.getItem(PASS_KEY);
-        if (!storedUser || !storedPass) {
-          localStorage.setItem(USER_KEY, username);
-          localStorage.setItem(PASS_KEY, password);
-          renderApp();
-        } else if (storedUser === username && storedPass === password) {
-          renderApp();
-        } else {
-          alert("Incorrect username or password.");
+        let users = getUsers();
+        if (!users[username]) {
+          alert("No such user. Please register first.");
+          return;
         }
+        if (!users[username].activated) {
+          alert("Account not activated. Please check your email and activate first.");
+          return;
+        }
+        if (users[username].password !== password) {
+          alert("Incorrect password.");
+          return;
+        }
+        sessionUser = { username, email: users[username].email };
+        renderMainPage();
+      };
+    }
+
+    // ---- Main Page ----
+    function renderMainPage() {
+      document.getElementById('app').innerHTML = `
+        <button class="logout-btn" id="logout-btn">Logout</button>
+        <div class="section">
+          <h2>Welcome, ${sessionUser.username}!</h2>
+          <p>
+            <strong>MyChange System</strong> helps you track your daily goals, habits, and reflections to foster personal growth.
+          </p>
+          <ul>
+            <li>Fill out a <strong>Daily Form</strong> to record your intentions, goals, and reflections for each day.</li>
+            <li>Track your progress in the <strong>Calendar</strong> tab.</li>
+            <li>Your entries are private and only visible to you.</li>
+          </ul>
+          <button id="goto-app" style="margin-top:20px;">Enter App</button>
+        </div>
+      `;
+      document.getElementById('logout-btn').onclick = logout;
+      document.getElementById('goto-app').onclick = function() {
+        renderApp();
       }
     }
 
-    // --- App logic ---
-    let currentTab = "calendar";
+    // ---- App ----
     function renderApp() {
-      // Check login
-      let storedUser = localStorage.getItem(USER_KEY);
-      let storedPass = localStorage.getItem(PASS_KEY);
-      if (!storedUser || !storedPass) {
-        renderLogin();
-        return;
-      }
-      // Render menu
       document.getElementById('app').innerHTML = `
         <button class="logout-btn" id="logout-btn">Logout</button>
         <div class="menu">
-          <div class="tab ${currentTab === "calendar" ? "active" : ""}" id="tab-calendar">Calendar</div>
+          <div class="tab ${currentTab === "calendar" ? "active" : ""}" id="tab-calendar">Calendar & Progress</div>
           <div class="tab ${currentTab === "form" ? "active" : ""}" id="tab-form">Daily Form</div>
         </div>
         <div id="tab-content"></div>
       `;
-      document.getElementById('logout-btn').onclick = function() {
-        localStorage.removeItem(USER_KEY);
-        localStorage.removeItem(PASS_KEY);
-        renderLogin();
-      }
+      document.getElementById('logout-btn').onclick = logout;
       document.getElementById('tab-calendar').onclick = function() {
         currentTab = "calendar";
         renderTabContent();
@@ -212,127 +328,123 @@
       renderTabContent();
     }
 
-    // --- Daily Form tab ---
+    function logout() {
+      sessionUser = null;
+      currentTab = "calendar";
+      renderLogin();
+    }
+
+    // ---- Daily Form tab ----
     function renderFormTab() {
-      // Get today
       let today = (new Date()).toISOString().slice(0, 10);
-      let responses = JSON.parse(localStorage.getItem(RESPONSES_KEY) || "{}");
-      let todaysData = responses[today] || {};
-      document.getElementById('tab-content').innerHTML = `
+      let responses = getUserResponses(sessionUser.username);
+      let todaysData = responses[today];
+
+      let formHtml = `
         <div class="section">
           <h2>🗓️ Daily Check-in for <span id="today-date">${today}</span></h2>
-          <form id="daily-form">
-            <label>🌅 What is your main intention today?</label>
-            <input type="text" id="intention" value="${todaysData.intention || ""}" />
-            
-            <label>💪 Today's Top 3 Goals</label>
-            <input type="text" id="goal1" placeholder="Goal 1" value="${todaysData.goal1 || ""}" />
-            <input type="text" id="goal2" placeholder="Goal 2" value="${todaysData.goal2 || ""}" />
-            <input type="text" id="goal3" placeholder="Goal 3" value="${todaysData.goal3 || ""}" />
-            
-            <label>🧘 Health & Mind Check</label>
-            <input type="checkbox" id="sleep" ${todaysData.sleep ? "checked" : ""}/> Slept well last night<br>
-            <input type="checkbox" id="exercise" ${todaysData.exercise ? "checked" : ""}/> Moved or exercised<br>
-            <input type="checkbox" id="healthy_eating" ${todaysData.healthy_eating ? "checked" : ""}/> Ate healthy meals<br>
-            
-            <label>❤️ Emotional & Social</label>
-            <input type="checkbox" id="connection" ${todaysData.connection ? "checked" : ""}/> Connected with someone<br>
-            <input type="checkbox" id="gratitude" ${todaysData.gratitude ? "checked" : ""}/> Expressed gratitude<br>
-            
-            <label>🌙 Evening Reflection</label>
-            <textarea id="went_well" placeholder="What went well today?">${todaysData.went_well || ""}</textarea>
-            <textarea id="challenge" placeholder="What challenged you today?">${todaysData.challenge || ""}</textarea>
-            <textarea id="improve" placeholder="What will you improve tomorrow?">${todaysData.improve || ""}</textarea>
-            
-            <button type="submit">Save</button>
-          </form>
+          ${todaysData ? `
+            <div style="color: #44b700; font-weight: bold; margin-bottom: 14px;">
+              You have already submitted today's entry.
+            </div>
+          ` : `
+            <form id="daily-form">
+              <label>🌅 What is your main intention today?</label>
+              <input type="text" id="intention" />
+
+              <label>💪 Today's Top 3 Goals</label>
+              <input type="text" id="goal1" placeholder="Goal 1" />
+              <input type="text" id="goal2" placeholder="Goal 2" />
+              <input type="text" id="goal3" placeholder="Goal 3" />
+
+              <label>🧘 Health & Mind Check</label>
+              <input type="checkbox" id="sleep"/> Slept well last night<br>
+              <input type="checkbox" id="exercise"/> Moved or exercised<br>
+              <input type="checkbox" id="healthy_eating"/> Ate healthy meals<br>
+
+              <label>❤️ Emotional & Social</label>
+              <input type="checkbox" id="connection"/> Connected with someone<br>
+              <input type="checkbox" id="gratitude"/> Expressed gratitude<br>
+
+              <label>🌙 Evening Reflection</label>
+              <textarea id="went_well" placeholder="What went well today?"></textarea>
+              <textarea id="challenge" placeholder="What challenged you today?"></textarea>
+              <textarea id="improve" placeholder="What will you improve tomorrow?"></textarea>
+
+              <button type="submit">Save</button>
+            </form>
+          `}
         </div>
       `;
-      document.getElementById('daily-form').onsubmit = function(e) {
-        e.preventDefault();
-        let newData = {
-          intention: document.getElementById('intention').value,
-          goal1: document.getElementById('goal1').value,
-          goal2: document.getElementById('goal2').value,
-          goal3: document.getElementById('goal3').value,
-          sleep: document.getElementById('sleep').checked,
-          exercise: document.getElementById('exercise').checked,
-          healthy_eating: document.getElementById('healthy_eating').checked,
-          connection: document.getElementById('connection').checked,
-          gratitude: document.getElementById('gratitude').checked,
-          went_well: document.getElementById('went_well').value,
-          challenge: document.getElementById('challenge').value,
-          improve: document.getElementById('improve').value,
-        };
-        responses[today] = newData;
-        localStorage.setItem(RESPONSES_KEY, JSON.stringify(responses));
-        alert("Daily entry saved!");
-        renderTabContent();
+      document.getElementById('tab-content').innerHTML = formHtml;
+      if (!todaysData) {
+        document.getElementById('daily-form').onsubmit = function(e) {
+          e.preventDefault();
+          let newData = {
+            intention: document.getElementById('intention').value,
+            goal1: document.getElementById('goal1').value,
+            goal2: document.getElementById('goal2').value,
+            goal3: document.getElementById('goal3').value,
+            sleep: document.getElementById('sleep').checked,
+            exercise: document.getElementById('exercise').checked,
+            healthy_eating: document.getElementById('healthy_eating').checked,
+            connection: document.getElementById('connection').checked,
+            gratitude: document.getElementById('gratitude').checked,
+            went_well: document.getElementById('went_well').value,
+            challenge: document.getElementById('challenge').value,
+            improve: document.getElementById('improve').value,
+          };
+          responses[today] = newData;
+          setUserResponses(sessionUser.username, responses);
+          alert("Daily entry saved!");
+          renderTabContent(); // Will show the "already submitted" message and remove the form
+        }
       }
     }
 
-    // --- Calendar tab ---
+    // ---- Calendar tab (entries as list, only today's entry can be added) ----
     function renderCalendarTab() {
-      let responses = JSON.parse(localStorage.getItem(RESPONSES_KEY) || "{}");
+      let responses = getUserResponses(sessionUser.username);
       let dates = Object.keys(responses).sort((a,b) => b.localeCompare(a));
       let html = `
         <div class="section">
           <h2>📅 Calendar & Progress</h2>
-          <table>
-            <thead>
-              <tr>
-                <th>Date</th>
-                <th>Intention</th>
-                <th>Goals</th>
-                <th class="checkbox-cell">Sleep</th>
-                <th class="checkbox-cell">Exercise</th>
-                <th class="checkbox-cell">Healthy Eating</th>
-                <th class="checkbox-cell">Connection</th>
-                <th class="checkbox-cell">Gratitude</th>
-                <th>Reflection</th>
-              </tr>
-            </thead>
-            <tbody>
+          <ul class="entry-list">
       `;
       if (dates.length === 0) {
-        html += `<tr><td colspan="9" style="text-align:center;color:#888;">No entries yet. Fill your daily form!</td></tr>`;
+        html += `<li style="text-align:center;color:#888;">No entries yet. Fill your daily form!</li>`;
       } else {
         for (let date of dates) {
           let d = responses[date];
           html += `
-            <tr class="${d.sleep && d.exercise && d.healthy_eating && d.connection && d.gratitude ? 'done' : ''}">
-              <td>${date}</td>
-              <td>${d.intention || ""}</td>
-              <td>
-                <ul style="padding-left:18px; margin:0;">
-                  <li>${d.goal1 || ""}</li>
-                  <li>${d.goal2 || ""}</li>
-                  <li>${d.goal3 || ""}</li>
-                </ul>
-              </td>
-              <td class="checkbox-cell">${d.sleep ? "✔️" : "❌"}</td>
-              <td class="checkbox-cell">${d.exercise ? "✔️" : "❌"}</td>
-              <td class="checkbox-cell">${d.healthy_eating ? "✔️" : "❌"}</td>
-              <td class="checkbox-cell">${d.connection ? "✔️" : "❌"}</td>
-              <td class="checkbox-cell">${d.gratitude ? "✔️" : "❌"}</td>
-              <td>
-                <strong>Went Well:</strong> ${d.went_well || ""}<br>
-                <strong>Challenge:</strong> ${d.challenge || ""}<br>
-                <strong>Improve:</strong> ${d.improve || ""}
-              </td>
-            </tr>
+            <li class="entry-item">
+              <span class="entry-date">${date}</span>
+              <div class="entry-detail">
+                <strong>Intention:</strong> ${d.intention || ""}
+                <br><strong>Goals:</strong> ${[d.goal1, d.goal2, d.goal3].filter(g=>g).join(', ')}
+                <br><strong>Sleep:</strong> ${d.sleep ? "✔️" : "❌"}
+                <strong>Exercise:</strong> ${d.exercise ? "✔️" : "❌"}
+                <strong>Healthy Eating:</strong> ${d.healthy_eating ? "✔️" : "❌"}
+                <strong>Connection:</strong> ${d.connection ? "✔️" : "❌"}
+                <strong>Gratitude:</strong> ${d.gratitude ? "✔️" : "❌"}
+                <br>
+                <strong>Reflection:</strong>
+                <br>What went well: ${d.went_well || ""}
+                <br>Challenge: ${d.challenge || ""}
+                <br>Improve: ${d.improve || ""}
+              </div>
+            </li>
           `;
         }
       }
       html += `
-            </tbody>
-          </table>
+          </ul>
         </div>
       `;
       document.getElementById('tab-content').innerHTML = html;
     }
 
-    // --- Tab switching logic ---
+    // ---- Tab switching ----
     function renderTabContent() {
       if (currentTab === "form") {
         renderFormTab();
@@ -341,15 +453,19 @@
       }
     }
 
-    // --- Start ---
+    // ---- Per-user responses ----
+    function getUserResponses(username) {
+      return JSON.parse(localStorage.getItem("mychange_responses_" + username) || "{}");
+    }
+    function setUserResponses(username, responses) {
+      localStorage.setItem("mychange_responses_" + username, JSON.stringify(responses));
+    }
+
+    // ---- Start ----
     window.onload = function() {
-      let storedUser = localStorage.getItem(USER_KEY);
-      let storedPass = localStorage.getItem(PASS_KEY);
-      if (!storedUser || !storedPass) {
-        renderLogin();
-      } else {
-        renderApp();
-      }
+      sessionUser = null;
+      currentTab = "calendar";
+      renderLogin();
     }
   </script>
 </body>
